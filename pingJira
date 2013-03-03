@@ -5,7 +5,7 @@
 #
 # Setup credential file at the path specified in credsfile variable, or ~/.jiraupdatercreds.json by default.
 #  an example config json:
-#     { "hostname" : "jira.web.com", "username" : "yourusername", "password" : "thepassword" }
+#     { "hostname" : "https://jira.web.com", "username" : "yourusername", "password" : "thepassword" }
 #  it is recommended to keep this file 400 permissions for security sake
 #
 $VERBOSE=nil
