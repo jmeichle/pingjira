@@ -111,7 +111,7 @@ data['issues'].each do|issue|
 			else
 				tobj = DateTime.strptime(lastTimestamp.split("T")[0] + " " + lastTimestamp.split("T")[1].split(".")[0], '%Y-%m-%d %H:%M:%S')
 				diffstr = (Time.now - Time.parse(tobj.to_s)).duration	
-				puts "#{issueKey} - No Updates since #{diffstr} - #{issueTitle} ago".green
+				puts "#{issueKey} - No Updates since #{diffstr} ago - #{issueTitle}".green
 			end
 		else
 			olddata[issueKey] = 0
@@ -128,7 +128,7 @@ data['issues'].each do|issue|
 					commentgraphic=" "+"-"*(screenwidth-2)+" "
 					tobj = DateTime.strptime(commentTimestamp.split("T")[0] + " " + commentTimestamp.split("T")[1].split(".")[0], '%Y-%m-%d %H:%M:%S')
 					diffstr = (Time.now - Time.parse(tobj.to_s)).duration
-					puts "New comment: #{commentAuthor}  - #{commentTimestamp} - #{diffstr} Ago\n#{commentgraphic}\n#{commentBody}\n#{commentgraphic}".yellow
+					puts "New comment: #{commentAuthor}  - #{commentTimestamp} - #{diffstr} ago\n#{commentgraphic}\n#{commentBody}\n#{commentgraphic}".yellow
 				end
 			end
 			cnt = cnt+1
