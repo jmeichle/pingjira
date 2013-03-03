@@ -5,7 +5,7 @@
 #
 # Setup credential file at the path specified in credsfile variable, or ~/.jiraupdatercreds.json by default.
 #  an example config json:
-#     { "hostname" : "https://jira.web.com", "username" : "yourusername", "password" : "thepassword" }
+#     { "project" : "DefaultProject", hostname" : "https://jira.web.com", "username" : "yourusername", "password" : "thepassword" }
 #  it is recommended to keep this file 400 permissions for security sake
 #
 $VERBOSE=nil
@@ -16,10 +16,63 @@ require 'date'
 require 'time'
 require 'pp'
 require 'json'
+require 'optparse'
 
+options = {}
+options[:ticketlist] = []
+options[:projects] = []
+optparse = OptionParser.new do|opts|
+  opts.on( '-h', '--help', 'Display this screen' ) do
+    puts opts
+    exit
+  end
+  opts.on( '-t', '--ticket TICKET', Array, "Ticket to 'clear' and thus view" ) do|t|
+    options[:ticketlist] = t || nil
+  end
+  opts.on( '-n', '--number-comments NUMBER', "Ticket to 'clear' and thus view" ) do|n|
+    options[:numcomments] = n || nil
+  end
+  opts.on( '-p', '--projects PROJECT', Array, "Jira projects to include(CSV), otherwise default as 'project' in creds file specifies. use 'any' for all projects." ) do|p|
+    options[:projects] = p || nil
+  end
+end
+optparse.parse!
 credsfile = "#{ENV['HOME']}/.jiraupdatercreds.json"
 statefile = "#{ENV['HOME']}/.jiraupdater.json"
-
+displayOK = true
+begin
+	creds = JSON.parse(File.read(credsfile))
+	defaultproject = creds['project']
+	username = creds['username']
+	password = creds['password']
+	hostname = creds['hostname']
+rescue
+	puts "NO CREDENTIAL FILE AT #{credsfile}"
+	puts "See the header of this file or README.md for credential file format"
+	exit 1
+end
+begin
+	olddata = JSON.parse(File.read(statefile))
+	if options[:numcomments] == nil
+		options[:ticketlist].collect {|el| el.upcase }.each do|ticket|
+			olddata.delete(ticket)
+			displayOK = false
+		end
+	else
+		options[:ticketlist].collect {|el| el.upcase }.each do|ticket|
+			displayOK = false
+			if olddata.has_key?(ticket)
+		  		olddata[ticket] = (olddata[ticket] - options[:numcomments].to_i)
+			end
+		end
+	end
+	File.open(statefile, 'w') {|f| f.write(JSON.generate(olddata)) }
+rescue
+	puts "Uh o"
+end
+if options[:projects].size == 0
+  options[:projects] = [ defaultproject ]
+end
 class String
   def colorize(color_code)
     "\e[#{color_code}m#{self}\e[0m"
@@ -43,7 +96,6 @@ class Numeric
     mins  = secs / 60
     hours = mins / 60
     days  = hours / 24
-
     if days > 0
       "#{days} days and #{hours % 24} hours"
     elsif hours > 0
@@ -54,16 +106,6 @@ class Numeric
       "#{secs} seconds"
     end
   end
-end
-begin
-	creds = JSON.parse(File.read(credsfile))
-	username = creds['username']
-	password = creds['password']
-	hostname = creds['hostname']
-rescue
-	puts "NO CREDENTIAL FILE AT #{credsfile}"
-	puts "See the header of this file or README.md for credential file format"
-	exit 1
 end
 begin
 	screenwidth = `tput cols`.to_i
@@ -88,7 +130,7 @@ seenkeys = []
 data['issues'].each do|issue|
 	issueKey = issue['key']
 	issueProject = issue['fields']['project']['key']
-	if ( issueProject == "OP" )
+    if ( options[:projects].collect {|el| el.upcase }.include? "ANY") or ( options[:projects].collect {|el| el.upcase }.include? issueProject)
 		seenkeys.push(issueKey)
 		issueTitle = issue['fields']['summary']
 		issueReporter = issue['fields']['reporter']['displayName']
@@ -98,20 +140,33 @@ data['issues'].each do|issue|
 		httpcomment = Net::HTTP.new(uricomment.host, uricomment.port)
 		httpcomment.use_ssl = true
 		httpcomment.verify_mode = OpenSSL::SSL::VERIFY_NONE
-		requestcomment = Net::HTTP::Get.new("/rest/api/2/issue/"+issueKey+"/comment")
-		requestcomment.basic_auth username, password
-		responsecomment = httpcomment.request(requestcomment)
-		datacomment = JSON.parse(responsecomment.body)
-		lastTimestamp = datacomment['comments'][-1]['updated']
-		issueTotalComments = datacomment['total']
-		newdata[issueKey] = issueTotalComments	
+		if ( options[:ticketlist].size == 0 ) or (options[:ticketlist].collect {|el| el.upcase }.include? issueKey.upcase)
+			requestcomment = Net::HTTP::Get.new("/rest/api/2/issue/"+issueKey+"/comment")
+			requestcomment.basic_auth username, password
+			responsecomment = httpcomment.request(requestcomment)
+			datacomment = JSON.parse(responsecomment.body)
+			issueTotalComments = datacomment['total']
+			newdata[issueKey] = issueTotalComments	
+		else 
+			datacomment = {}
+			datacomment['comments'] = []
+			datacomment['total'] = 0
+			newdata[issueKey] = olddata[issueKey]
+		end
+		if datacomment['comments'][0] == nil
+			lastTimestamp = issue['fields']['updated']
+		else
+			lastTimestamp = datacomment['comments'][-1]['updated']
+		end
 		if (olddata.has_key?(issueKey))
 			if (newdata[issueKey] > olddata[issueKey])
 				puts "Updated Ticket: #{issueKey} - #{issueTitle}".yellow
 			else
 				tobj = DateTime.strptime(lastTimestamp.split("T")[0] + " " + lastTimestamp.split("T")[1].split(".")[0], '%Y-%m-%d %H:%M:%S')
 				diffstr = (Time.now - Time.parse(tobj.to_s)).duration	
-				puts "#{issueKey} - No Updates since #{diffstr} ago - #{issueTitle}".green
+				if displayOK
+					puts "#{issueKey} - No Updates since #{diffstr} ago - #{issueTitle}".green
+				end
 			end
 		else
 			olddata[issueKey] = 0
@@ -133,16 +188,15 @@ data['issues'].each do|issue|
 			end
 			cnt = cnt+1
 		end
-		puts "="*screenwidth
+		if displayOK
+			puts "="*screenwidth
+		end
 	end
 end
-
 olddata.keys.each do|thekey|
 	if not newdata.has_key?(thekey)
 		puts "#{thekey} is no longer in your queue.".cyan
 		puts "="*screenwidth
 	end
 end
-
 File.open(statefile, 'w') {|f| f.write(JSON.generate(newdata)) }
-

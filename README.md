@@ -25,7 +25,7 @@ INSTALL:
 
 2) Setup credential file, default at ~/.jiraupdatercreds.json with format:
 
-	{ "hostname" : "https://jira.web.com", "username" : "yourusername", "password" : "thepassword" }
+	{ "project" : "DefaultProject", "hostname" : "https://jira.web.com", "username" : "yourusername", "password" : "thepassword" }
 
 3) chmod credential file to 400 permissions
 
