@@ -66,7 +66,7 @@ rescue
 	exit 1
 end
 begin
-	screenwidth = `tput cols 2>/dev/null`.to_i
+	screenwidth = `tput cols`.to_i
 rescue
 	screenwidth = 60
 end
